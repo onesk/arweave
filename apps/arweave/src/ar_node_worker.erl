@@ -4,7 +4,7 @@
 
 -module(ar_node_worker).
 
--export([start/2, stop/1, cast/2, call/2, call/3]).
+-export([start/2, stop/1, cast/2, call/2, call/3, generate_wallet_list_for_block/5]).
 
 -include("ar.hrl").
 -include("ar_data_sync.hrl").
@@ -535,8 +535,13 @@ apply_new_block(State, NewB) ->
 	end.
 
 generate_block_from_shadow(State, BShadow, TXs) ->
+	#{
+		reward_pool := RewardPool,
+		wallet_list := CurrentWalletList,
+		height := Height
+	} = State,
 	{WalletListHash, WalletList} =
-		generate_wallet_list_from_shadow(State, BShadow, TXs),
+		generate_wallet_list_for_block(RewardPool, CurrentWalletList, Height, BShadow, TXs),
 	B = BShadow#block {
 		wallet_list = WalletList,
 		wallet_list_hash = WalletListHash,
@@ -566,12 +571,7 @@ pick_txs(TXIDs, TXs) ->
 		TXIDs
 	).
 
-generate_wallet_list_from_shadow(StateIn, BShadow, TXs) ->
-	#{
-		reward_pool := RewardPool,
-		wallet_list := WalletList,
-		height := Height
-	} = StateIn,
+generate_wallet_list_for_block(RewardPool, WalletList, Height, BShadow, TXs) ->
 	RewardAddr = BShadow#block.reward_addr,
 	NewHeight = BShadow#block.height,
 	{FinderReward, _} =

@@ -155,9 +155,19 @@ prepare_block_id(ID) when is_integer(ID) ->
 	"/block/height/" ++ integer_to_list(ID).
 
 %% @doc Retreive a block shadow by hash or height from remote peers.
-get_block_shadow([], _ID) ->
-	unavailable;
+get_block_shadow(Peers, ID) when is_binary(ID) ->
+	case ar_storage:read_block_shadow(ID) of
+		unavailable ->
+			get_block_shadow_from_remote_peers(Peers, ID);
+		B ->
+			{no_peer, B}
+	end;
 get_block_shadow(Peers, ID) ->
+	get_block_shadow_from_remote_peers(Peers, ID).
+
+get_block_shadow_from_remote_peers([], _ID) ->
+	unavailable;
+get_block_shadow_from_remote_peers(Peers, ID) ->
 	Peer = lists:nth(rand:uniform(min(5, length(Peers))), Peers),
 	case handle_block_response(
 		Peer,
@@ -174,9 +184,9 @@ get_block_shadow(Peers, ID) ->
 		block_shadow
 	) of
 		unavailable ->
-			get_block_shadow(Peers -- [Peer], ID);
+			get_block_shadow_from_remote_peers(Peers -- [Peer], ID);
 		not_found ->
-			get_block_shadow(Peers -- [Peer], ID);
+			get_block_shadow_from_remote_peers(Peers -- [Peer], ID);
 		B ->
 			{Peer, B}
 	end.

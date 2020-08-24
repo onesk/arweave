@@ -157,30 +157,30 @@ apply_next_block(State) ->
 		target_height = TargetHeight,
 		target_hashes_to_go = [NextH | _]
 	} = State,
-	NextB = ar_http_iface_client:get_block(Peers, NextH),
 	ar:info(
 		[
 			{event, applying_fork_recovery},
 			{block, ar_util:encode(NextH)}
 		]
 	),
-	case ?IS_BLOCK(NextB) of
-		false ->
-			ar:warn(
+	case ar_http_iface_client:get_block_shadow(Peers, NextH) of
+		unavailable ->
+			ar:err(
 				[
 					{event, fork_recovery_failed},
 					{reason, failed_to_fetch_block},
 					{block, ar_util:encode(NextH)}
 				]
 			);
-		true ->
+		{_Peer, NextB} ->
 			%% Ensure that block being applied is not the genesis block and
 			%% is within the range of fork recovery.
 			%%
 			%% The range check is redundant but is made for the early detection
 			%% and reporting of the invalid block.
 			case
-				{NextB#block.height, ((TargetHeight - NextB#block.height) > ?STORE_BLOCKS_BEHIND_CURRENT)}
+				{NextB#block.height,
+					((TargetHeight - NextB#block.height) > ?STORE_BLOCKS_BEHIND_CURRENT)}
 			of
 				%% Recovering to genesis block.
 				{0, _} ->
@@ -201,7 +201,19 @@ apply_next_block(State) ->
 					);
 				%% Target block is within the accepted range.
 				{_X, _Y} ->
-					apply_next_block(State, NextB)
+					MempoolTXs = ar_node:get_pending_txs(whereis(http_entrypoint_node), [as_map]),
+					case ar_http_iface_client:get_txs(Peers, MempoolTXs, NextB) of
+						{ok, TXs} ->
+							apply_next_block(State, NextB#block{ txs = TXs });
+						_ ->
+							ar:err(
+								[
+									{event, fork_recovery_failed},
+									{reason, failed_to_fetch_transactions},
+									{block, ar_util:encode(NextH)}
+								]
+							)
+					end
 			end
 	end.
 
@@ -219,7 +231,19 @@ apply_next_block(State, NextB) ->
 				]
 			);
 		true ->
-			apply_next_block(State, NextB, B)
+			{WalletListHash, WalletList} =
+				ar_node_worker:generate_wallet_list_for_block(
+					B#block.reward_pool,
+					B#block.wallet_list,
+					B#block.height,
+					NextB,
+					NextB#block.txs
+				),
+			apply_next_block(
+				State,
+				NextB#block{ wallet_list = WalletList, wallet_list_hash = WalletListHash },
+				B
+			)
 	end.
 
 apply_next_block(State, NextB, B) ->
