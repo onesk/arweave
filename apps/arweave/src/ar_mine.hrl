@@ -11,13 +11,13 @@ end()).
 
 %% @doc The size of the search space - a share of the weave randomly sampled
 %% at every block. The solution must belong to the search space.
--define(SEARCH_SPACE_SIZE(Height), fun() ->
+-define(SPORA_SEARCH_SPACE_SIZE(Height, SearchSpaceUpperBound), fun() ->
 	Forks = {
 		ar_fork:height_2_4()
 	},
 	case Forks of
 		{Fork_2_4} when Height >= Fork_2_4 ->
-			1024 * 1024 * 1024 * 1024 % 1 TB
+			SearchSpaceUpperBound div 10 % 10% of the weave.
 	end
 end()).
 

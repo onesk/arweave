@@ -780,12 +780,12 @@ find_rx_hash(Hasher, Nonce, BDS, Height) ->
 
 pick_recall_byte(H, PrevH, SearchSpaceUpperBound, Height) ->
 	Subspaces = ?SPORA_SEARCH_SPACE_SUBSPACES_COUNT(Height),
-	case SearchSpaceUpperBound < Subspaces of
-		true ->
+	SubspaceNumber = binary:decode_unsigned(H, big) rem Subspaces,
+	EvenSubspaceSize = ?SPORA_SEARCH_SPACE_SIZE(Height, SearchSpaceUpperBound) div Subspaces,
+	case EvenSubspaceSize of
+		0 ->
 			{error, weave_size_too_small};
-		false ->
-			SubspaceNumber = binary:decode_unsigned(H, big) rem Subspaces,
-			EvenSubspaceSize = SearchSpaceUpperBound div Subspaces,
+		_ ->
 			AbsoluteSubspaceStart = SubspaceNumber * EvenSubspaceSize,
 			SubspaceSize = min(SearchSpaceUpperBound - AbsoluteSubspaceStart, EvenSubspaceSize),
 			EncodedSubspaceNumber = binary:encode_unsigned(SubspaceNumber),
